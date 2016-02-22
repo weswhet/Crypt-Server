@@ -3,10 +3,12 @@ from django.contrib.auth.models import User, Permission
 from django.contrib.contenttypes.models import ContentType
 from django_extensions.db.fields.encrypted import EncryptedCharField
 
+from django.core.exceptions import ValidationError
+
 # Create your models here.
 class Computer(models.Model):
     #recovery_key = models.CharField(max_length=200, verbose_name="Recovery Key")
-    serial = models.CharField(max_length=200, verbose_name="Serial Number")
+    serial = models.CharField(max_length=200, verbose_name="Serial Number", unique=True)
     username = models.CharField(max_length=200, verbose_name="User Name")
     computername = models.CharField(max_length=200, verbose_name="Computer Name")
     last_checkin = models.DateTimeField(blank=True,null=True)
@@ -26,10 +28,21 @@ class Secret(models.Model):
     secret = EncryptedCharField(max_length=256)
     secret_type =  models.CharField(max_length=256, choices=SECRET_TYPES, default='recovery_key')
     date_escrowed = models.DateTimeField(auto_now_add=True)
+
+    def validate_unique(self, *args, **kwargs):
+        if self.secret in [str(s) for s in self.__class__.objects.filter(secret_type=self.secret_type, computer=self.computer)]:
+            raise ValidationError('already used')
+        super(Secret, self).validate_unique(*args, **kwargs)
+
+    def save(self, *args, **kwargs):
+        self.validate_unique()
+        super(Secret, self).save(*args, **kwargs)
+
     def __unicode__(self):
         return self.secret
     class Meta:
         ordering = ['-date_escrowed']
+
 
 class Request(models.Model):
     secret = models.ForeignKey(Secret)
